@@ -11,6 +11,7 @@ def detect_and_crop(image_path):
     img = Image.open(image_path).convert("RGB")
     img_width, img_height = img.size
     crops = []
+    boxes_info = []  # Store box coordinates
 
     # Get top 40 boxes sorted by confidence
     boxes = results.boxes
@@ -28,8 +29,16 @@ def detect_and_crop(image_path):
         x2_exp = min(img_width, x2 + expansion_ratio * w)
         y2_exp = min(img_height, y2 + expansion_ratio * h)
 
+        # Store original (non-expanded) box coordinates
+        boxes_info.append({
+            'x1': int(x1),
+            'y1': int(y1),
+            'x2': int(x2),
+            'y2': int(y2)
+        })
+
         # Crop and append
         crop = img.crop((int(x1_exp), int(y1_exp), int(x2_exp), int(y2_exp)))
         crops.append(crop)
 
-    return crops
+    return crops, boxes_info
