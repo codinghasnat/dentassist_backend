@@ -28,7 +28,7 @@ def filter_teeth(crops):
             logit = model(img_tensor)
             prob = torch.sigmoid(logit).item()
             print(f"[DEBUG] Crop {crop}: prob = {prob:.4f}")
-            if prob >= 0.2:  # Classify as "tooth"
+            if prob >= 0.15:  # Classify as "tooth"
                 filtered.append(crop)
 
     return filtered

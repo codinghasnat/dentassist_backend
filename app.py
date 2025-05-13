@@ -23,6 +23,35 @@ def encode_image_base64(image: Image.Image) -> str:
     encoded = base64.b64encode(buffered.getvalue()).decode("utf-8")
     return f"data:image/jpeg;base64,{encoded}"
 
+@app.route('/disease_classify', methods=['POST'])
+def disease_classify():
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image uploaded'}), 400
+
+    image = request.files['image']
+    filename = datetime.now().strftime("%Y%m%d%H%M%S") + '_' + image.filename
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    image.save(filepath)
+
+    # Single tooth classification
+    prediction = classify_teeth(filepath)  # Assuming classify_teeth can handle single images
+    
+    # Convert the image to base64
+    image_base64 = encode_image_base64(Image.open(filepath).convert("RGB"))
+
+    # Return single result
+    return jsonify({
+        "originalImage": image_base64,
+        "annotatedImage": "",  # you can replace this later
+        "detectedTeeth": [{
+            "id": 0,
+            "image": image_base64,
+            "disease": prediction["disease"],
+            "confidence": round(prediction["confidence"], 4)
+        }]
+    })
+
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     if 'image' not in request.files:

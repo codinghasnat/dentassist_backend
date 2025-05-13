@@ -1,6 +1,7 @@
 import torch
 from torchvision import transforms, models
 from torch import nn
+from PIL import Image
 
 # === Class Names ===
 class_names = [
@@ -29,10 +30,22 @@ transform = transforms.Compose([
 ])
 
 # === Run classification on list of cropped PIL Images ===
-def classify_teeth(crops):
+def classify_teeth(input_data):
     predictions = []
-    for idx, crop in enumerate(crops):
-        img_tensor = transform(crop).unsqueeze(0)
+    
+    # Handle both single image and list of images
+    if isinstance(input_data, str):  # If input is a filepath
+        image = Image.open(input_data).convert('RGB')
+        images = [image]
+    elif isinstance(input_data, Image.Image):  # If input is a single PIL Image
+        images = [input_data]
+    elif isinstance(input_data, list):  # If input is a list of images
+        images = input_data
+    else:
+        raise TypeError(f"Unexpected input type: {type(input_data)}")
+
+    for idx, img in enumerate(images):
+        img_tensor = transform(img).unsqueeze(0)
         with torch.no_grad():
             output = model(img_tensor)
             pred_class = output.argmax(dim=1).item()
@@ -40,9 +53,11 @@ def classify_teeth(crops):
 
             predictions.append({
                 "id": idx,
-                "image": "",  # You can populate this later if saving or encoding images
                 "disease": class_names[pred_class],
                 "confidence": round(confidence, 4),
             })
 
+    # If single image was passed, return just the first prediction
+    if isinstance(input_data, (str, Image.Image)):
+        return predictions[0]
     return predictions
