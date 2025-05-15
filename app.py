@@ -8,9 +8,10 @@ from io import BytesIO
 import shutil
 
 from detector import detect_and_crop
-from binary_classifier import filter_teeth
+from binary_classifier import binary_filter_teeth
 from disease_classifier import classify_teeth
 from utils.image_processing import save_annotated_images
+from bb_filering import bounding_box_filter_iou, bounding_box_filter_center, hybrid_filter
 
 app = Flask(__name__)
 CORS(app)
@@ -72,21 +73,36 @@ def analyze():
         initial_crops, boxes_info = detect_and_crop(filepath)
 
         # Step 2: Binary classifier filtering
-        filtered_crops = filter_teeth(initial_crops)
-        # Keep only the boxes that correspond to filtered crops
-        filtered_boxes = [boxes_info[i] for i, crop in enumerate(initial_crops) 
-                         if crop in filtered_crops]
+        filtered = binary_filter_teeth(initial_crops)
+        filtered_indices = [idx for idx, _ in filtered]
+        filtered_crops = [crop for _, crop in filtered]
+        filtered_boxes = [boxes_info[i] for i in filtered_indices]
+
+        # Step 3: Bounding box filtering: 3 different options
+        # Option A: IOU only
+        filtered_boxes, filtered_crops = bounding_box_filter_iou(filtered_boxes, filtered_crops)
+
+        # Option B: Midpoint only
+        # filtered_boxes, filtered_crops = bounding_box_filter_center(filtered_boxes, filtered_crops)
+
+        # Option C: Hybrid
+        # filtered_boxes, filtered_crops = hybrid_filter(filtered_boxes, filtered_crops)
+        # print("[DEBUG] After bounding box filtering")
+
         
-        # Save annotated images
+        # Save annotated images of NEW filtered boxes
         save_annotated_images(filepath, filtered_boxes)
+        # print("[DEBUG] After save_annotated_images")
         
-        # Save cropped teeth
+        # Save cropped teeth of NEW filtered teeth
         save_cropped_teeth(filtered_crops)
+        # print("[DEBUG] After save_cropped_teeth")
 
-        # Step 3: Multiclass disease classification
+        # Step 4: Multiclass disease classification
         predictions = classify_teeth(filtered_crops)
+        # print("[DEBUG] After classify_teeth")
 
-        # Step 4: Attach base64-encoded images
+        # Step 5: Attach base64-encoded images
         results = []
         for idx, (crop, pred) in enumerate(zip(filtered_crops, predictions)):
             # Get the individual annotated image for this tooth

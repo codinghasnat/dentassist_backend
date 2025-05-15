@@ -20,15 +20,14 @@ transform = transforms.Compose([
 ])
 
 # === Inference ===
-def filter_teeth(crops):
+def binary_filter_teeth(crops):
     filtered = []
-    for crop in crops:
-        img_tensor = transform(crop).unsqueeze(0)  # [1, 3, 224, 224]
+    for idx, crop in enumerate(crops):
+        img_tensor = transform(crop).unsqueeze(0)
         with torch.no_grad():
             logit = model(img_tensor)
             prob = torch.sigmoid(logit).item()
-            print(f"[DEBUG] Crop {crop}: prob = {prob:.4f}")
-            if prob >= 0.15:  # Classify as "tooth"
-                filtered.append(crop)
-
+            print(f"[DEBUG] Crop {idx}: prob = {prob:.4f}")
+            if prob >= 0.15: # Classify as tooth.
+                filtered.append((idx, crop))  # Keep index too
     return filtered
