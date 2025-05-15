@@ -10,7 +10,7 @@ import shutil
 from detector import detect_and_crop
 from binary_classifier import binary_filter_teeth
 from disease_classifier import classify_teeth
-from utils.image_processing import save_annotated_images
+from utils.image_processing import save_annotated_images, draw_boxes
 from bb_filering import bounding_box_filter_iou, bounding_box_filter_center, hybrid_filter
 
 app = Flask(__name__)
@@ -41,13 +41,33 @@ def disease_classify():
     # Single tooth classification
     prediction = classify_teeth(filepath)  # Assuming classify_teeth can handle single images
     
-    # Convert the image to base64
-    image_base64 = encode_image_base64(Image.open(filepath).convert("RGB"))
+    # Create a dummy bounding box for the whole image
+    img = Image.open(filepath).convert("RGB")
+    width, height = img.size
+    box = {
+        'x1': 20,
+        'y1': 20,
+        'x2': width - 20,
+        'y2': height - 20,
+        'disease': prediction["disease"]
+    }
+    
+    # Create annotated image
+    output_dir = "annotated_xrays_single_tooth"
+    os.makedirs(output_dir, exist_ok=True)
+    annotated_path = os.path.join(output_dir, "single_tooth.jpg")
+    
+    # Call draw_boxes to create annotated image with disease-specific color
+    draw_boxes(filepath, [box], annotated_path)
+    
+    # Convert the images to base64
+    image_base64 = encode_image_base64(img)
+    annotated_base64 = encode_image_base64(Image.open(annotated_path).convert("RGB"))
 
     # Return single result
     return jsonify({
         "originalImage": image_base64,
-        "annotatedImage": "",  # you can replace this later
+        "annotatedImage": annotated_base64,
         "detectedTeeth": [{
             "id": 0,
             "image": image_base64,
@@ -89,8 +109,15 @@ def analyze():
         # filtered_boxes, filtered_crops = hybrid_filter(filtered_boxes, filtered_crops)
         # print("[DEBUG] After bounding box filtering")
 
+        # Step 4: Multiclass disease classification
+        predictions = classify_teeth(filtered_crops)
+        # print("[DEBUG] After classify_teeth")
         
-        # Save annotated images of NEW filtered boxes
+        # Step 5: Add disease classifications to bounding boxes for color coding
+        for i, pred in enumerate(predictions):
+            filtered_boxes[i]['disease'] = pred['disease']
+        
+        # Save annotated images of NEW filtered boxes with disease-based colors
         save_annotated_images(filepath, filtered_boxes)
         # print("[DEBUG] After save_annotated_images")
         
@@ -98,11 +125,7 @@ def analyze():
         save_cropped_teeth(filtered_crops)
         # print("[DEBUG] After save_cropped_teeth")
 
-        # Step 4: Multiclass disease classification
-        predictions = classify_teeth(filtered_crops)
-        # print("[DEBUG] After classify_teeth")
-
-        # Step 5: Attach base64-encoded images
+        # Step 6: Attach base64-encoded images
         results = []
         for idx, (crop, pred) in enumerate(zip(filtered_crops, predictions)):
             # Get the individual annotated image for this tooth
