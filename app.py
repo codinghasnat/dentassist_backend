@@ -14,7 +14,14 @@ from utils.image_processing import save_annotated_images, draw_boxes
 from bb_filering import bounding_box_filter_iou, bounding_box_filter_center, hybrid_filter
 
 app = Flask(__name__)
-CORS(app)
+# CORS(app)
+
+# CORS(app, supports_credentials=True, origins="*")
+CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://192.168.1.160:3000"])
+# Allow all
+# CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+
 
 UPLOAD_FOLDER = 'uploads'
 STORAGE_FOLDER = 'stored_xrays'  # Permanent storage for original xrays
