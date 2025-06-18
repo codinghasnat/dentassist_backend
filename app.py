@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from datetime import datetime
 import os
@@ -6,11 +6,14 @@ import base64
 from PIL import Image
 from io import BytesIO
 import shutil
+import uuid
+import json
 
 from detector import detect_and_crop
 from binary_classifier import binary_filter_teeth
 from disease_classifier import classify_teeth
 from utils.image_processing import save_annotated_images, draw_boxes
+from utils.report_generator import generate_pdf_report
 from bb_filering import bounding_box_filter_iou, bounding_box_filter_center, hybrid_filter
 
 app = Flask(__name__)
@@ -25,8 +28,10 @@ CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://1
 
 UPLOAD_FOLDER = 'uploads'
 STORAGE_FOLDER = 'stored_xrays'  # Permanent storage for original xrays
+REPORTS_FOLDER = 'reports'  # Folder for generated PDF reports
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(STORAGE_FOLDER, exist_ok=True)
+os.makedirs(REPORTS_FOLDER, exist_ok=True)
 
 def encode_image_base64(image: Image.Image) -> str:
     """Convert PIL image to base64 string."""
@@ -174,6 +179,67 @@ def save_cropped_teeth(crops, output_dir="saved_crops"):
         crop.save(path)
         saved_paths.append(path)
     return saved_paths
+
+
+@app.route('/generate_report', methods=['POST'])
+def generate_report():
+    try:
+        # Parse JSON data from request
+        data = request.json
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Debug: Log received data structure
+        print("[DEBUG] Report data keys:", data.keys())
+        
+        # Create a unique report ID
+        report_id = str(uuid.uuid4())
+        report_filename = f"dental_report_{report_id}.pdf"
+        report_path = os.path.join(REPORTS_FOLDER, report_filename)
+        
+        # Generate the PDF report
+        generate_pdf_report(data, report_path)
+        
+        # Return the path to download the report
+        return jsonify({
+            'success': True,
+            'report_id': report_id,
+            'download_url': f'/download_report/{report_id}'
+        })
+    
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"[ERROR] Report generation failed: {str(e)}")
+        print(f"[ERROR] Traceback: {error_traceback}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/download_report/<report_id>', methods=['GET'])
+def download_report(report_id):
+    try:
+        report_filename = f"dental_report_{report_id}.pdf"
+        report_path = os.path.join(REPORTS_FOLDER, report_filename)
+        
+        print(f"[DEBUG] Looking for report at: {report_path}")
+        print(f"[DEBUG] File exists: {os.path.exists(report_path)}")
+        
+        if not os.path.exists(report_path):
+            return send_file(
+                '404.html',
+                mimetype='text/html'
+            ), 404
+        
+        return send_file(
+            report_path,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=report_filename
+        )
+    
+    except Exception as e:
+        print(f"[ERROR] Error serving report: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
